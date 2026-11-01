@@ -1,0 +1,39 @@
+name: montecarlo-lab
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: mc-db
+    environment:
+      POSTGRES_USER: montecarlo
+      POSTGRES_PASSWORD: montecarlo
+      POSTGRES_DB: montecarlo
+    # The database is only reachable from the Compose network. Uncomment to
+    # inspect it from the host (pick a free port):
+    # ports:
+    #   - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U montecarlo -d montecarlo"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+    container_name: mc-api
+    environment:
+      MC_DATABASE_URL: postgresql+psycopg://montecarlo:montecarlo@db:5432/montecarlo
+      MC_ENVIRONMENT: docker
+      MC_LOG_LEVEL: INFO
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
