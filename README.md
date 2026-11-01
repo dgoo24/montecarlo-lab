@@ -175,14 +175,14 @@ La configuración se lee de variables `MC_*` o de un `.env` (ver `.env.example`)
   "seed": 42,
   "duration_ms": 37,
   "summary": {
-    "mean": 107.2,
-    "std": 30.1,
-    "p05": 68.4,
-    "p50": 103.7,
-    "p95": 156.4,
-    "var_95": 68.4,
-    "expected_shortfall_95": 59.1,
-    "prob_above_threshold": 0.275,
+    "mean": 107.05,
+    "std": 27.08,
+    "p05": 68.77,
+    "p50": 103.71,
+    "p95": 156.38,
+    "var_95": 68.77,
+    "expected_shortfall_95": 63.12,
+    "prob_above_threshold": 0.28,
     "histogram": {"bins": ["..."], "counts": ["..."]}
   }
 }
