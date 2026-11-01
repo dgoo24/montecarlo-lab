@@ -19,7 +19,7 @@ Proyecto de portafolio construido para cubrir, de punta a punta, el ciclo de vid
 | Persistencia en PostgreSQL | SQLAlchemy 2 tipado, JSONB para parámetros, tabla de paths con PK compuesta, migraciones Alembic | `app/db/models.py`, `alembic/` |
 | ETL de datos experimentales | Validación de esquema, *encoding* y timestamps, deduplicación, outliers por IQR, checksum SHA-256, estadísticas | `app/services/etl.py` |
 | Tests unitarios y de integración | 52 tests con `pytest`; los de integración corren contra PostgreSQL migrado con Alembic | `tests/` |
-| Docker + GitHub Actions | Imagen multi-etapa ligera y no-root, `docker compose` con healthchecks, 3 jobs de CI con servicio PostgreSQL y smoke test end-to-end | `Dockerfile`, `docker-compose.yml`, `.github/workflows/ci.yml` |
+| Docker + GitHub Actions | Imagen `slim` no-root con healthcheck, `docker compose` con espera a BD sana, 3 jobs de CI con PostgreSQL y smoke test end-to-end | `Dockerfile`, `docker-compose.yml`, `.github/workflows/ci.yml` |
 
 ---
 

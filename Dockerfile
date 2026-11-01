@@ -8,7 +8,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Dependencies first, so code changes do not invalidate the install layer.
+# The build backend needs the package sources, so they are copied before install.
 COPY pyproject.toml README.md ./
 COPY app ./app
 RUN pip install --upgrade pip && pip install .
