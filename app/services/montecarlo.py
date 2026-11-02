@@ -16,6 +16,8 @@ from app.schemas.simulations import GbmParams, NormalParams, OuParams, Simulatio
 
 HISTOGRAM_BINS = 24
 QUANTILES = (0.05, 0.25, 0.50, 0.75, 0.95)
+MAX_SAMPLE_PATHS = 25
+MAX_SAMPLE_STEPS = 300
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,6 +102,24 @@ def _normal(
     """Static uncertainty propagation: one draw per path."""
     shocks = rng.standard_normal((n_paths, 1))
     return params.mean + params.std * shocks
+
+
+def sample_trajectories(paths: np.ndarray) -> dict[str, Any]:
+    """Downsample full paths to a bounded preview for charts.
+
+    The response keeps at most ``MAX_SAMPLE_PATHS`` paths and
+    ``MAX_SAMPLE_STEPS`` points per path, which caps the JSONB payload at a few
+    tens of kilobytes regardless of the run size.
+    """
+    n_paths, n_points = paths.shape
+    path_index = np.linspace(0, n_paths - 1, min(MAX_SAMPLE_PATHS, n_paths), dtype=int)
+    step_index = np.linspace(0, n_points - 1, min(MAX_SAMPLE_STEPS, n_points), dtype=int)
+    sample = paths[np.ix_(path_index, step_index)]
+
+    return {
+        "steps": [int(step) for step in step_index],
+        "paths": [[float(f"{value:.6g}") for value in row] for row in sample],
+    }
 
 
 def summarise(values: np.ndarray, threshold: float | None) -> dict[str, Any]:

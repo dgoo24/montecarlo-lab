@@ -11,10 +11,12 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db
 from app.schemas.common import Page
 from app.schemas.simulations import (
+    Histogram,
     SimulationCreate,
     SimulationPathRead,
     SimulationRead,
     SimulationResults,
+    SimulationTrajectories,
 )
 from app.services import simulations as service
 
@@ -95,6 +97,26 @@ def get_simulation_paths(
         limit=limit,
         offset=offset,
     )
+
+
+@router.get(
+    "/{run_id}/histogram",
+    response_model=Histogram,
+    summary="Histogram of terminal values",
+)
+def get_simulation_histogram(run_id: UUID, db: DbSession) -> Histogram:
+    run = service.get_run(db, run_id)
+    return Histogram.model_validate(service.get_histogram(run))
+
+
+@router.get(
+    "/{run_id}/trajectories",
+    response_model=SimulationTrajectories,
+    summary="Bounded preview of the simulated paths (for charts)",
+)
+def get_simulation_trajectories(run_id: UUID, db: DbSession) -> SimulationTrajectories:
+    run = service.get_run(db, run_id)
+    return SimulationTrajectories.model_validate(service.get_trajectories(run))
 
 
 @router.delete(

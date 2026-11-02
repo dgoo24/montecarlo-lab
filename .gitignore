@@ -11,6 +11,9 @@ venv/
 # Environment
 .env
 
+# Streamlit Cloud secrets belong to the deployment, never to the repository
+.streamlit/secrets.toml
+
 # Tooling
 .pytest_cache/
 .ruff_cache/

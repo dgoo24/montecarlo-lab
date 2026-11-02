@@ -76,6 +76,33 @@ def test_paths_endpoint_paginates(client: TestClient) -> None:
     assert [item["path_index"] for item in body["items"]] == list(range(5, 15))
 
 
+def test_histogram_endpoint(client: TestClient) -> None:
+    run = create_simulation(client)
+
+    response = client.get(f"/api/v1/simulations/{run['id']}/histogram")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["counts"]) == 24
+    assert len(body["bins"]) == 25
+    assert sum(body["counts"]) == 500
+
+
+def test_trajectories_endpoint(client: TestClient) -> None:
+    run = create_simulation(client)
+
+    response = client.get(f"/api/v1/simulations/{run['id']}/trajectories")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total_paths"] == 500
+    assert body["sampled_paths"] == 25
+    assert len(body["paths"]) == 25
+    assert len(body["steps"]) == 61  # n_steps=60 -> 61 points
+    assert all(len(path) == 61 for path in body["paths"])
+    assert body["dt"] == pytest.approx(1 / 252)
+
+
 def test_list_filters_by_status(client: TestClient) -> None:
     create_simulation(client)
     create_simulation(client, name="Second run")
@@ -152,3 +179,5 @@ def test_failed_execution_is_recorded(client: TestClient, monkeypatch: pytest.Mo
     failed_id = runs[0]["id"]
     assert client.get(f"/api/v1/simulations/{failed_id}/results").status_code == 409
     assert client.get(f"/api/v1/simulations/{failed_id}/paths").status_code == 409
+    assert client.get(f"/api/v1/simulations/{failed_id}/histogram").status_code == 409
+    assert client.get(f"/api/v1/simulations/{failed_id}/trajectories").status_code == 409

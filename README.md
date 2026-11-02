@@ -1,12 +1,14 @@
 # MonteCarlo Lab
 
-Servicio backend en Python para **ejecutar simulaciones de Monte Carlo**, persistir cada corrida en **PostgreSQL** y **procesar datos experimentales** con un pipeline ETL validado.
+Servicio backend en Python para **ejecutar simulaciones de Monte Carlo**, persistir cada corrida en **PostgreSQL** y **procesar datos experimentales** con un pipeline ETL validado. Incluye un **frontend Streamlit** para crear simulaciones, explorar histogramas, trayectorias y series temporales.
 
-Proyecto de portafolio construido para cubrir, de punta a punta, el ciclo de vida de un servicio científico: modelo numérico → API REST → persistencia → ingesta de datos → tests → contenedor → CI.
+Proyecto de portafolio construido para cubrir, de punta a punta, el ciclo de vida de un servicio científico: modelo numérico → API REST → persistencia → ingesta de datos → tests → contenedor → CI → despliegue.
 
 ```
-52 tests · 96% cobertura · ruff limpio · CI con PostgreSQL real
+56 tests backend + 2 tests de UI · 96% cobertura · ruff limpio · CI con PostgreSQL real
 ```
+
+> **Demo:** lista para desplegar gratis en **Render** (API Docker) + **Neon** (PostgreSQL) + **Streamlit Community Cloud**. Sigue [docs/DEPLOY.md](docs/DEPLOY.md); el despliegue real requiere tus cuentas.
 
 ---
 
@@ -16,10 +18,12 @@ Proyecto de portafolio construido para cubrir, de punta a punta, el ciclo de vid
 |---|---|---|
 | Servicios Python para simulaciones Monte Carlo | Motores vectorizados con NumPy: GBM, Ornstein-Uhlenbeck y propagación normal. Reproducibles por semilla | `app/services/montecarlo.py` |
 | APIs REST con FastAPI para iniciar y consultar | CRUD de corridas, paginación, validación con Pydantic, OpenAPI automático, manejo de errores de dominio | `app/api/routes/` |
-| Persistencia en PostgreSQL | SQLAlchemy 2 tipado, JSONB para parámetros, tabla de paths con PK compuesta, migraciones Alembic | `app/db/models.py`, `alembic/` |
+| Persistencia en PostgreSQL | SQLAlchemy 2 tipado, JSONB para parámetros y resumen, tabla de paths con PK compuesta, migraciones Alembic | `app/db/models.py`, `alembic/` |
 | ETL de datos experimentales | Validación de esquema, *encoding* y timestamps, deduplicación, outliers por IQR, checksum SHA-256, estadísticas | `app/services/etl.py` |
-| Tests unitarios y de integración | 52 tests con `pytest`; los de integración corren contra PostgreSQL migrado con Alembic | `tests/` |
-| Docker + GitHub Actions | Imagen `slim` no-root con healthcheck, `docker compose` con espera a BD sana, 3 jobs de CI con PostgreSQL y smoke test end-to-end | `Dockerfile`, `docker-compose.yml`, `.github/workflows/ci.yml` |
+| Tests unitarios y de integración | 56 tests con `pytest`; los de integración corren contra PostgreSQL migrado con Alembic. 2 tests de UI con `AppTest` | `tests/`, `frontend/tests/` |
+| Docker + GitHub Actions | Imagen `slim` no-root con healthcheck, `docker compose` con espera a BD sana, 4 jobs de CI con PostgreSQL, smoke test E2E y AppTest | `Dockerfile`, `docker-compose.yml`, `.github/workflows/ci.yml` |
+| Frontend ligero | Streamlit + Altair: formulario dinámico por modelo, KPIs, histograma, trayectorias, series temporales con outliers, tablas e historial | `frontend/app.py` |
+| Despliegue gratuito | `render.yaml` para la API Docker en Render, Neon para PostgreSQL y guía para Streamlit Community Cloud | `render.yaml`, `docs/DEPLOY.md` |
 
 ---
 
@@ -27,11 +31,12 @@ Proyecto de portafolio construido para cubrir, de punta a punta, el ciclo de vid
 
 ```
             ┌──────────────────────────────────────────────┐
-            │              Cliente / curl / UI             │
+            │   Streamlit frontend · local / Cloud         │
+            │   formulario · KPIs · histograma · series    │
             └──────────────────┬───────────────────────────┘
                                │ HTTP (JSON / multipart)
             ┌──────────────────▼───────────────────────────┐
-            │               FastAPI (uvicorn)              │
+            │        FastAPI + uvicorn (Docker/Render)     │
             │  /api/v1/simulations    /api/v1/datasets     │
             │  validación Pydantic    health / readiness   │
             └───────┬─────────────────────────┬────────────┘
@@ -44,9 +49,11 @@ Proyecto de portafolio construido para cubrir, de punta a punta, el ciclo de vid
                     │                         │
             ┌───────▼─────────────────────────▼───────────┐
             │          SQLAlchemy 2 + Alembic             │
-            │               PostgreSQL 16                 │
+            │        PostgreSQL 16 (Docker o Neon)        │
             └─────────────────────────────────────────────┘
 ```
+
+El frontend llama a la API **desde el servidor de Streamlit**, no desde el navegador: no necesita CORS ni expone credenciales de base de datos.
 
 ---
 
@@ -61,9 +68,12 @@ Proyecto de portafolio construido para cubrir, de punta a punta, el ciclo de vid
 | PostgreSQL | 16 | Persistencia relacional y JSONB |
 | pandas | ≥ 2.2 | ETL y control de calidad de datos |
 | NumPy | ≥ 2.0 | Simulación vectorizada |
-| pytest | ≥ 8.2 | Tests unitarios y de integración |
+| Streamlit + Altair | ≥ 1.57 / ≥ 5 | Frontend y gráficos Vega-Lite |
+| httpx | ≥ 0.27 | Cliente HTTP del frontend |
+| pytest | ≥ 8.2 | Tests unitarios, de integración y de UI |
 | Docker / Compose | — | Empaquetado y entorno reproducible |
-| GitHub Actions | — | Lint, tests y smoke test |
+| GitHub Actions | — | Lint, tests, smoke test y AppTest |
+| Render + Neon | Free tier | Despliegue de la API y PostgreSQL gestionado |
 
 ---
 
@@ -80,6 +90,7 @@ docker compose up --build
 | Documentación interactiva | http://localhost:8000/docs |
 | OpenAPI JSON | http://localhost:8000/openapi.json |
 | Health / readiness | http://localhost:8000/health · `/health/ready` |
+| Frontend Streamlit | http://localhost:8501 (se arranca aparte, ver abajo) |
 | PostgreSQL | Solo en la red de Compose (`db:5432`) |
 
 El contenedor aplica las migraciones de Alembic en el arranque (`docker/entrypoint.sh`) y espera a que la base de datos esté sana. La base no publica puerto en el host para no chocar con un PostgreSQL local; se inspecciona con:
@@ -87,6 +98,18 @@ El contenedor aplica las migraciones de Alembic en el arranque (`docker/entrypoi
 ```bash
 docker compose exec db psql -U montecarlo -d montecarlo
 ```
+
+### Frontend local
+
+El frontend es una app Streamlit independiente que consume la API por HTTP:
+
+```bash
+pip install -r frontend/requirements.txt
+streamlit run frontend/app.py
+# http://localhost:8501
+```
+
+La URL de la API se edita en la barra lateral (por defecto `http://localhost:8000`). La app comprueba `/health` y `/health/ready` al arrancar y muestra el estado en la barra lateral.
 
 Prueba rápida:
 
@@ -151,6 +174,8 @@ La configuración se lee de variables `MC_*` o de un `.env` (ver `.env.example`)
 | `GET` | `/api/v1/simulations?status=&limit=&offset=` | Lista corridas con paginación y filtro |
 | `GET` | `/api/v1/simulations/{id}` | Detalle de una corrida |
 | `GET` | `/api/v1/simulations/{id}/results?sample=200` | Resumen + muestra de valores terminales |
+| `GET` | `/api/v1/simulations/{id}/histogram` | Histograma de 24 bins de los valores terminales |
+| `GET` | `/api/v1/simulations/{id}/trajectories` | Vista previa acotada de trayectorias (máx. 25 paths × 300 pasos) |
 | `GET` | `/api/v1/simulations/{id}/paths?limit=&offset=` | Página los estadísticos por path |
 | `DELETE` | `/api/v1/simulations/{id}` | Borra la corrida y sus paths (cascade) |
 | `POST` | `/api/v1/datasets` | Sube un CSV (multipart) y ejecuta el ETL |
@@ -253,12 +278,14 @@ datasets        ──< measurements
 
 | Tabla | Propósito | Detalles |
 |---|---|---|
-| `simulation_runs` | Corrida y su resumen | `params` y `summary` en JSONB, estado, duración, semilla |
+| `simulation_runs` | Corrida y su resumen | `params`, `summary` y `trajectory_sample` en JSONB, estado, duración, semilla |
 | `simulation_paths` | Estadísticos por path | PK compuesta `(run_id, path_index)`, FK con `ON DELETE CASCADE`, índice `(run_id, terminal_value)` |
 | `datasets` | CSV ingerido | checksum, contadores de calidad, estadísticas en JSONB |
 | `measurements` | Observaciones en formato largo | índice compuesto `(dataset_id, variable, recorded_at)` |
 
 **Por qué los valores terminales van en filas y no en un JSONB:** permiten paginar, indexar y agregar con SQL sin cargar la corrida completa en memoria. El JSONB se reserva para estructuras de forma variable (parámetros y resumen).
+
+**Por qué las trayectorias se guardan acotadas:** el motor calcula todas las rutas en memoria, pero `trajectory_sample` conserva como máximo 25 trayectorias × 300 pasos (~7.500 floats) para que el frontend dibuje el gráfico sin almacenar millones de valores por corrida.
 
 ---
 
@@ -271,9 +298,12 @@ pytest tests/unit
 # Todo (requiere PostgreSQL)
 export MC_DATABASE_URL="postgresql+psycopg://montecarlo:montecarlo@localhost:5432/montecarlo_test"
 pytest --cov=app --cov-report=term-missing
+
+# UI de Streamlit (no necesita API; usa AppTest)
+pytest frontend/tests
 ```
 
-- **52 tests**, **96 %** de cobertura de líneas.
+- **56 tests** de backend y **2 tests** de UI, con **96 %** de cobertura de líneas.
 - Unitarios: motores estocásticos (formas, momentos, reproducibilidad), ETL (encoding, delimitadores, outliers, rechazos), validación de payloads.
 - Integración: API completa contra PostgreSQL real, con la base migrada por **Alembic** (no `create_all`), para que las migraciones también se testeen.
 - Aislamiento: se trunca el esquema antes de cada test.
@@ -283,11 +313,12 @@ pytest --cov=app --cov-report=term-missing
 
 ## CI/CD
 
-`.github/workflows/ci.yml` define tres jobs:
+`.github/workflows/ci.yml` define cuatro jobs:
 
 1. **quality** — `ruff check` y `ruff format --check`.
 2. **test** — PostgreSQL 16 como *service container*, `pytest` con cobertura y subida de `coverage.xml` como artefacto.
 3. **docker** — `docker compose up --build --wait`, `scripts/smoke_test.py` contra el stack real, logs si falla y `down -v` siempre.
+4. **frontend** — instala `frontend/requirements.txt` y ejecuta los tests de UI con `AppTest`, sin necesitar la API.
 
 En un repositorio **público** los minutos de GitHub Actions son gratuitos; en uno privado el plan Free incluye 2.000 minutos/mes, de sobra para este pipeline.
 
@@ -321,11 +352,16 @@ En un repositorio **público** los minutos de GitHub Actions son gratuitos; en u
 ├── tests/
 │   ├── unit/
 │   └── integration/
+├── frontend/                # app Streamlit + tests de UI (AppTest)
+│   ├── app.py
+│   └── tests/
 ├── scripts/                 # generador de datos y smoke test
 ├── data/                    # dataset sintético de ejemplo
+├── docs/                    # guía de despliegue Render + Neon
 ├── docker/entrypoint.sh
 ├── Dockerfile
 ├── docker-compose.yml
+├── render.yaml
 ├── pyproject.toml
 └── .github/workflows/ci.yml
 ```
@@ -339,7 +375,7 @@ En un repositorio **público** los minutos de GitHub Actions son gratuitos; en u
 - **Almacenamiento de objetos** (S3/MinIO) para conservar el CSV original en lugar de solo las mediciones normalizadas.
 - **Observabilidad**: métricas Prometheus (`/metrics`), trazas OpenTelemetry y logs estructurados.
 - **Paginación por cursor** en `measurements` para datasets de millones de filas.
-- **Frontend ligero** que consuma `/results` y `/stats` para visualizar histogramas y series.
+- **Procesamiento en streaming** para CSV que superen el límite actual de 200.000 filas.
 
 ---
 

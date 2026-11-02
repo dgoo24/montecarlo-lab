@@ -51,6 +51,9 @@ class SimulationRun(Base):
         String(20), nullable=False, default="pending", server_default="pending", index=True
     )
     summary: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    # Bounded preview of the trajectories (a few paths, downsampled steps) so a
+    # UI can draw the series without persisting millions of floats per run.
+    trajectory_sample: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     error: Mapped[str | None] = mapped_column(Text)
     duration_ms: Mapped[int | None] = mapped_column(Integer)
 

@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from app.schemas.simulations import GbmParams, NormalParams, OuParams
-from app.services.montecarlo import simulate, summarise
+from app.services.montecarlo import sample_trajectories, simulate, summarise
 
 
 def test_gbm_paths_shape_and_positivity() -> None:
@@ -87,3 +87,21 @@ def test_summary_without_threshold_returns_none() -> None:
     summary = summarise(np.array([1.0, 2.0, 3.0]), None)
     assert summary["prob_above_threshold"] is None
     assert summary["mean"] == pytest.approx(2.0)
+
+
+def test_sample_trajectories_is_bounded() -> None:
+    sample = sample_trajectories(np.ones((1_000, 2_000)))
+
+    assert len(sample["paths"]) == 25
+    assert all(len(row) == 300 for row in sample["paths"])
+    assert len(sample["steps"]) == 300
+    assert sample["steps"][0] == 0
+    assert sample["steps"][-1] == 1_999
+
+
+def test_sample_trajectories_keeps_small_runs_untouched() -> None:
+    sample = sample_trajectories(np.arange(15).reshape(3, 5))
+
+    assert sample["steps"] == [0, 1, 2, 3, 4]
+    assert len(sample["paths"]) == 3
+    assert sample["paths"][1] == [5.0, 6.0, 7.0, 8.0, 9.0]

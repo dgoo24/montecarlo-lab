@@ -134,3 +134,14 @@ class SimulationResults(BaseModel):
     terminal_values: list[float] = Field(description="Sample of terminal values, in path order")
     returned: int
     total_paths: int
+
+
+class SimulationTrajectories(BaseModel):
+    """Bounded preview of the simulated paths, suitable for charting."""
+
+    run_id: UUID
+    steps: list[int] = Field(description="Step indices kept in the preview")
+    paths: list[list[float]] = Field(description="One list of values per sampled path")
+    sampled_paths: int
+    total_paths: int
+    dt: float | None = Field(default=None, description="Time step, when the model defines one")

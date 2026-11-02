@@ -1,0 +1,17 @@
+# Native Streamlit theme (no custom CSS). Shared by local runs and the cloud app.
+[theme]
+base = "light"
+primaryColor = "#0F766E"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F3F7F6"
+textColor = "#0F172A"
+borderColor = "#DCE5E3"
+linkColor = "#0F766E"
+baseRadius = "medium"
+font = "Inter, Segoe UI, sans-serif"
+
+[server]
+headless = true
+
+[browser]
+gatherUsageStats = false

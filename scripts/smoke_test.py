@@ -1,8 +1,8 @@
 """End-to-end smoke test against a running API instance.
 
-Exercises the three core flows: a Monte Carlo run, a dataset upload with the
-ETL pipeline, and the aggregate metrics endpoint. Exits non-zero on failure,
-so it doubles as a deployment gate in CI.
+Exercises the core flows: a Monte Carlo run with its chart endpoints, a dataset
+upload with the ETL pipeline, and the aggregate metrics endpoint. Exits non-zero
+on failure, so it doubles as a deployment gate in CI.
 
 Usage:
     python scripts/smoke_test.py --base-url http://localhost:8000
@@ -54,6 +54,28 @@ def main() -> int:
         results = client.get(f"/api/v1/simulations/{run_body['id']}/results?sample=5")
         results.raise_for_status()
         print(f"[ok] results       {results.json()['returned']} sampled terminal values")
+
+        histogram = client.get(f"/api/v1/simulations/{run_body['id']}/histogram")
+        histogram.raise_for_status()
+        histogram_body = histogram.json()
+        assert sum(histogram_body["counts"]) == run_body["n_paths"]
+        assert len(histogram_body["bins"]) == len(histogram_body["counts"]) + 1
+        print(
+            f"[ok] histogram     {len(histogram_body['counts'])} bins, "
+            f"{sum(histogram_body['counts'])} terminal values"
+        )
+
+        trajectories = client.get(f"/api/v1/simulations/{run_body['id']}/trajectories")
+        trajectories.raise_for_status()
+        trajectories_body = trajectories.json()
+        assert len(trajectories_body["paths"]) == trajectories_body["sampled_paths"] <= 25
+        assert all(
+            len(path) == len(trajectories_body["steps"]) for path in trajectories_body["paths"]
+        )
+        print(
+            f"[ok] trajectories  {trajectories_body['sampled_paths']} of "
+            f"{trajectories_body['total_paths']} paths x {len(trajectories_body['steps'])} points"
+        )
 
         if not SAMPLE.exists():
             print(f"[!!] sample file missing: {SAMPLE}", file=sys.stderr)

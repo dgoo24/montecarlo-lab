@@ -89,3 +89,18 @@ jobs:
       - name: Tear down
         if: always()
         run: docker compose down -v
+
+  frontend:
+    name: Streamlit app smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: frontend/requirements.txt
+      - name: Install frontend dependencies
+        run: pip install -r frontend/requirements.txt pytest
+      - name: Run AppTest suite
+        run: pytest frontend/tests -q

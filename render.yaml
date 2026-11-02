@@ -1,0 +1,20 @@
+# Render Blueprint: https://render.com/docs/blueprint-spec
+#
+# Deploy with "New > Blueprint" in the Render dashboard. The database lives in
+# Neon (free tier); set MC_DATABASE_URL manually as a secret when prompted.
+services:
+  - type: web
+    name: montecarlo-lab-api
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health/ready
+    autoDeploy: true
+    envVars:
+      - key: MC_ENVIRONMENT
+        value: production
+      - key: MC_LOG_LEVEL
+        value: INFO
+      - key: MC_DATABASE_URL
+        sync: false

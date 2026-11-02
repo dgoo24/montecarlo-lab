@@ -59,6 +59,7 @@ def create_and_run(session: Session, payload: SimulationCreate) -> SimulationRun
                 {"simulation_id": str(run_id)},
             )
         run.summary = output.summary
+        run.trajectory_sample = montecarlo.sample_trajectories(output.paths)
         run.status = "completed"
         run.duration_ms = duration_ms
         run.finished_at = datetime.now(UTC)
@@ -186,3 +187,26 @@ def delete_run(session: Session, run_id: UUID) -> None:
     if result.rowcount == 0:
         raise NotFoundError(f"Simulation {run_id} not found")
     session.commit()
+
+
+def get_histogram(run: SimulationRun) -> dict:
+    """Return the stored histogram, rejecting runs without results."""
+    if run.status != "completed" or not run.summary:
+        raise ConflictError(f"Simulation {run.id} has no results (status={run.status})")
+    return run.summary["histogram"]
+
+
+def get_trajectories(run: SimulationRun) -> dict:
+    """Return the bounded trajectory preview stored with the run."""
+    if run.status != "completed" or not run.trajectory_sample:
+        raise ConflictError(f"Simulation {run.id} has no results (status={run.status})")
+
+    sample = run.trajectory_sample
+    return {
+        "run_id": run.id,
+        "steps": sample["steps"],
+        "paths": sample["paths"],
+        "sampled_paths": len(sample["paths"]),
+        "total_paths": run.n_paths,
+        "dt": run.params.get("dt"),
+    }
