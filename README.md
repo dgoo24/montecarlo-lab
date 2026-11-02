@@ -8,7 +8,7 @@ Proyecto de portafolio construido para cubrir, de punta a punta, el ciclo de vid
 56 tests backend + 2 tests de UI · 96% cobertura · ruff limpio · CI con PostgreSQL real
 ```
 
-> **Demo:** lista para desplegar gratis en **Render** (API Docker) + **Neon** (PostgreSQL) + **Streamlit Community Cloud**. Sigue [docs/DEPLOY.md](docs/DEPLOY.md); el despliegue real requiere tus cuentas.
+> **Demo:** [frontend en Streamlit](https://p776drtvmpekupvxkyiuww.streamlit.app/) · [API en Render](https://montecarlo-lab-api.onrender.com/docs) — desplegada con **Render** (API Docker + PostgreSQL) y **Streamlit Community Cloud**. La guía completa está en [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ---
 
@@ -23,7 +23,7 @@ Proyecto de portafolio construido para cubrir, de punta a punta, el ciclo de vid
 | Tests unitarios y de integración | 56 tests con `pytest`; los de integración corren contra PostgreSQL migrado con Alembic. 2 tests de UI con `AppTest` | `tests/`, `frontend/tests/` |
 | Docker + GitHub Actions | Imagen `slim` no-root con healthcheck, `docker compose` con espera a BD sana, 4 jobs de CI con PostgreSQL, smoke test E2E y AppTest | `Dockerfile`, `docker-compose.yml`, `.github/workflows/ci.yml` |
 | Frontend ligero | Streamlit + Altair: formulario dinámico por modelo, KPIs, histograma, trayectorias, series temporales con outliers, tablas e historial | `frontend/app.py` |
-| Despliegue gratuito | `render.yaml` para la API Docker en Render, Neon para PostgreSQL y guía para Streamlit Community Cloud | `render.yaml`, `docs/DEPLOY.md` |
+| Despliegue gratuito | `render.yaml` para la API Docker en Render, PostgreSQL gestionado en Render y guía para Streamlit Community Cloud | `render.yaml`, `docs/DEPLOY.md` |
 
 ---
 
@@ -49,7 +49,7 @@ Proyecto de portafolio construido para cubrir, de punta a punta, el ciclo de vid
                     │                         │
             ┌───────▼─────────────────────────▼───────────┐
             │          SQLAlchemy 2 + Alembic             │
-            │        PostgreSQL 16 (Docker o Neon)        │
+            │      PostgreSQL 16 (Docker o Render)        │
             └─────────────────────────────────────────────┘
 ```
 
@@ -73,7 +73,7 @@ El frontend llama a la API **desde el servidor de Streamlit**, no desde el naveg
 | pytest | ≥ 8.2 | Tests unitarios, de integración y de UI |
 | Docker / Compose | — | Empaquetado y entorno reproducible |
 | GitHub Actions | — | Lint, tests, smoke test y AppTest |
-| Render + Neon | Free tier | Despliegue de la API y PostgreSQL gestionado |
+| Render + Render Postgres | Free tier | Despliegue de la API y PostgreSQL gestionado |
 
 ---
 
@@ -357,7 +357,7 @@ En un repositorio **público** los minutos de GitHub Actions son gratuitos; en u
 │   └── tests/
 ├── scripts/                 # generador de datos y smoke test
 ├── data/                    # dataset sintético de ejemplo
-├── docs/                    # guía de despliegue Render + Neon
+├── docs/                    # guía de despliegue Render + Render Postgres
 ├── docker/entrypoint.sh
 ├── Dockerfile
 ├── docker-compose.yml
@@ -386,7 +386,7 @@ Todo el stack es software libre y el proyecto se puede desarrollar, testear y pu
 | Servicio | Opción gratuita |
 |---|---|
 | Python, FastAPI, SQLAlchemy, pandas, NumPy, pytest | Open source |
-| PostgreSQL | Docker local, o free tier permanente de **Neon** / **Supabase** |
+| PostgreSQL | Docker local, o free tier de **Render Postgres** / **Neon** / **Supabase** |
 | Git + GitHub | Repos públicos y privados gratuitos |
 | GitHub Actions | Gratis en repos públicos; 2.000 min/mes en privados (plan Free) |
 | Docker Desktop | Gratis para uso personal, educativo y empresas pequeñas* |

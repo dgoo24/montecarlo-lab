@@ -1,7 +1,8 @@
 # Render Blueprint: https://render.com/docs/blueprint-spec
 #
-# Deploy with "New > Blueprint" in the Render dashboard. The database lives in
-# Neon (free tier); set MC_DATABASE_URL manually as a secret when prompted.
+# Deploy with "New > Blueprint" in the Render dashboard. The database is a
+# Render Postgres instance (free tier); set MC_DATABASE_URL manually as a secret
+# when prompted, using the internal database URL with the +psycopg driver.
 services:
   - type: web
     name: montecarlo-lab-api
