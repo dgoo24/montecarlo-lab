@@ -43,10 +43,10 @@ HISTORY_LIMIT = 50
 MAX_MEASUREMENT_ROWS = 10_000
 
 STATUS_LABELS = {
-    "pending": "Pendiente",
-    "running": "En ejecución",
-    "completed": "Completada",
-    "failed": "Fallida",
+    "pending": "Ausstehend",
+    "running": "Läuft",
+    "completed": "Abgeschlossen",
+    "failed": "Fehlgeschlagen",
 }
 STATUS_COLORS = {
     "pending": "gray",
@@ -59,22 +59,23 @@ MODELS: dict[str, dict[str, str]] = {
     "GBM": {
         "kind": "gbm",
         "description": (
-            "Movimiento browniano geométrico: crecimiento multiplicativo con "
-            "volatilidad constante. El modelo clásico para precios de activos."
+            "Geometrische Brownsche Bewegung: multiplikatives Wachstum bei "
+            "konstanter Volatilität. Das klassische Modell für Vermögenspreise."
         ),
     },
     "Ornstein-Uhlenbeck": {
         "kind": "ou",
         "description": (
-            "Proceso con reversión a la media: la serie es atraída hacia μ a una "
-            "velocidad θ. Útil para magnitudes físicas que vuelven a su equilibrio."
+            "Prozess mit Mean-Reversion: Die Reihe wird mit Geschwindigkeit θ zum "
+            "Mittelwert μ gezogen. Nützlich für physikalische Größen, die zu ihrem "
+            "Gleichgewicht zurückkehren."
         ),
     },
     "Normal": {
         "kind": "normal",
         "description": (
-            "Propagación estática de incertidumbre: una extracción N(μ, σ²) por "
-            "trayectoria, sin dimensión temporal."
+            "Statische Unsicherheitsfortpflanzung: eine Ziehung N(μ, σ²) pro "
+            "Pfad, ohne Zeitdimension."
         ),
     },
 }
@@ -131,7 +132,7 @@ def _error_detail(detail: Any) -> str:
                     for part in item.get("loc", ())
                     if part not in {"body", "query", "path"}
                 ]
-                message = str(item.get("msg", "valor inválido"))
+                message = str(item.get("msg", "ungültiger Wert"))
                 messages.append(f"{' → '.join(location)}: {message}" if location else message)
             else:
                 messages.append(str(item))
@@ -150,8 +151,7 @@ def api_request(
         response = api_client(base_url).request(method, path, **kwargs)
     except httpx.HTTPError as exc:
         raise ApiError(
-            f"No se pudo conectar con la API en {base_url}. "
-            "Comprueba que el servicio está arrancado."
+            f"Verbindung zur API unter {base_url} fehlgeschlagen. Prüfen Sie, ob der Dienst läuft."
         ) from exc
 
     if response.status_code >= 400:
@@ -160,7 +160,7 @@ def api_request(
         except ValueError:
             payload = None
         detail = payload.get("detail") if isinstance(payload, dict) else None
-        message = _error_detail(detail) if detail else f"Error HTTP {response.status_code}"
+        message = _error_detail(detail) if detail else f"HTTP-Fehler {response.status_code}"
         raise ApiError(message, status_code=response.status_code, detail=detail)
 
     if response.status_code == 204:
@@ -171,7 +171,7 @@ def api_request(
 def render_api_error(error: ApiError) -> None:
     st.error(str(error))
     if error.detail and not isinstance(error.detail, str):
-        with st.expander("Detalle del error", icon=":material/bug_report:"):
+        with st.expander("Fehlerdetails", icon=":material/bug_report:"):
             st.json(error.detail)
 
 
@@ -180,7 +180,7 @@ def render_api_error(error: ApiError) -> None:
 # ---------------------------------------------------------------------------
 
 
-@st.cache_data(ttl=15, show_spinner="Conectando con la API…")
+@st.cache_data(ttl=15, show_spinner="Verbinde mit der API…")
 def load_api_status(base_url: str) -> dict[str, Any]:
     try:
         health = api_request(base_url, "GET", "/health")
@@ -281,16 +281,38 @@ def refresh_dataset_caches() -> None:
 # ---------------------------------------------------------------------------
 
 
+def _de_number(text: str) -> str:
+    """Convert an English-formatted number (1,234.56) to German notation (1.234,56)."""
+    if "e" in text or "E" in text:
+        return text
+    return text.replace(",", "\x00").replace(".", ",").replace("\x00", ".")
+
+
+def fmt_decimal(value: float, significant: int = 6) -> str:
+    """Format a number with German thousands and decimal separators."""
+    return _de_number(f"{value:,.{significant}g}")
+
+
+def fmt_int(value: int) -> str:
+    """Format an integer with German thousands separators."""
+    return f"{value:,.0f}".replace(",", ".")
+
+
+def fmt_percent(value: float) -> str:
+    """Format a fraction as a German percentage, e.g. ``28,00 %``."""
+    return _de_number(f"{value * 100:,.2f}") + " %"
+
+
 def fmt_number(value: float | None) -> str:
     if value is None:
         return "—"
-    return f"{value:,.6g}"
+    return fmt_decimal(value)
 
 
 def fmt_metric(value: float | None) -> str:
     if value is None:
         return "—"
-    return f"{value:,.6g}"
+    return fmt_decimal(value)
 
 
 def fmt_datetime(value: str | None) -> str:
@@ -300,7 +322,7 @@ def fmt_datetime(value: str | None) -> str:
         stamp = pd.Timestamp(value)
         if stamp.tzinfo is not None:
             stamp = stamp.tz_convert("UTC")
-        return stamp.strftime("%Y-%m-%d %H:%M UTC")
+        return stamp.strftime("%d.%m.%Y %H:%M UTC")
     except (ValueError, TypeError):
         return value
 
@@ -308,7 +330,7 @@ def fmt_datetime(value: str | None) -> str:
 def fmt_duration(value: int | None) -> str:
     if value is None:
         return "—"
-    return f"{value:,} ms"
+    return f"{fmt_int(value)} ms"
 
 
 def style_chart(chart: alt.Chart) -> alt.Chart:
@@ -355,17 +377,17 @@ def render_simulation_results(base_url: str, run_id: str) -> None:
 
     st.caption(
         f"`{run['id'][:8]}` · {run['model'].upper()} · "
-        f"semilla {run['seed'] if run['seed'] is not None else 'aleatoria'} · "
+        f"Seed {fmt_int(run['seed']) if run['seed'] is not None else 'zufällig'} · "
         f"{fmt_datetime(run['created_at'])}"
     )
 
     if status != "completed":
         if status == "failed":
-            st.error(run.get("error") or "La ejecución falló sin mensaje de error.")
+            st.error(run.get("error") or "Der Lauf ist ohne Fehlermeldung fehlgeschlagen.")
         else:
             st.info(
-                "La simulación todavía no tiene resultados. "
-                f"Estado actual: {STATUS_LABELS.get(status, status)}."
+                "Die Simulation hat noch keine Ergebnisse. "
+                f"Aktueller Status: {STATUS_LABELS.get(status, status)}."
             )
         return
 
@@ -373,17 +395,17 @@ def render_simulation_results(base_url: str, run_id: str) -> None:
     threshold = run.get("threshold")
 
     metric_columns = st.columns(5)
-    metric_columns[0].metric("Media", fmt_metric(summary.get("mean")), border=True)
-    metric_columns[1].metric("Desv. típica", fmt_metric(summary.get("std")), border=True)
+    metric_columns[0].metric("Mittelwert", fmt_metric(summary.get("mean")), border=True)
+    metric_columns[1].metric("Standardabweichung", fmt_metric(summary.get("std")), border=True)
     metric_columns[2].metric("P05", fmt_metric(summary.get("p05")), border=True)
-    metric_columns[3].metric("Mediana", fmt_metric(summary.get("p50")), border=True)
+    metric_columns[3].metric("Median", fmt_metric(summary.get("p50")), border=True)
     metric_columns[4].metric("P95", fmt_metric(summary.get("p95")), border=True)
 
     chart_column, series_column = st.columns(2, gap="large")
 
     with chart_column:
         with st.container(border=True):
-            st.markdown("**Distribución de valores terminales**")
+            st.markdown("**Verteilung der Endwerte**")
             try:
                 histogram = load_histogram(base_url, run_id)
             except ApiError as exc:
@@ -398,7 +420,7 @@ def render_simulation_results(base_url: str, run_id: str) -> None:
                     }
                 )
                 hist_frame["interval"] = [
-                    f"{start:,.4g} – {end:,.4g}"
+                    f"{fmt_decimal(start, 4)} – {fmt_decimal(end, 4)}"
                     for start, end in zip(hist_frame["start"], hist_frame["end"], strict=True)
                 ]
 
@@ -406,12 +428,12 @@ def render_simulation_results(base_url: str, run_id: str) -> None:
                     alt.Chart(hist_frame)
                     .mark_bar(color=PRIMARY)
                     .encode(
-                        x=alt.X("start:Q", title="Valor terminal"),
+                        x=alt.X("start:Q", title="Endwert"),
                         x2="end:Q",
-                        y=alt.Y("count:Q", title="Trayectorias"),
+                        y=alt.Y("count:Q", title="Pfade"),
                         tooltip=[
-                            alt.Tooltip("interval:N", title="Intervalo"),
-                            alt.Tooltip("count:Q", title="Trayectorias", format=","),
+                            alt.Tooltip("interval:N", title="Intervall"),
+                            alt.Tooltip("count:Q", title="Pfade", format=","),
                         ],
                     )
                 )
@@ -421,7 +443,7 @@ def render_simulation_results(base_url: str, run_id: str) -> None:
                     .encode(x="x:Q")
                 )
                 layers: list[alt.Chart] = [bars, mean_rule]
-                caption = "Línea ámbar discontinua: media."
+                caption = "Gestrichelte bernsteinfarbene Linie: Mittelwert."
 
                 if threshold is not None:
                     threshold_rule = (
@@ -430,21 +452,24 @@ def render_simulation_results(base_url: str, run_id: str) -> None:
                         .encode(x="x:Q")
                     )
                     layers.append(threshold_rule)
-                    caption = "Línea ámbar discontinua: media · línea roja: umbral."
+                    caption = (
+                        "Gestrichelte bernsteinfarbene Linie: Mittelwert · rote Linie: Schwelle."
+                    )
 
                 chart = style_chart(alt.layer(*layers).properties(height=300))
                 st.altair_chart(
                     chart,
                     alt=(
-                        f"Histograma de {summary['mean']:.4g} valores terminales medios "
-                        f"repartidos en {len(histogram['counts'])} intervalos"
+                        f"Histogramm der Endwerte mit Mittelwert "
+                        f"{fmt_decimal(summary['mean'], 4)}, "
+                        f"verteilt auf {len(histogram['counts'])} Intervalle"
                     ),
                 )
                 st.caption(caption)
 
     with series_column:
         with st.container(border=True):
-            st.markdown("**Trayectorias simuladas**")
+            st.markdown("**Simulierte Pfade**")
             try:
                 trajectories = load_trajectories(base_url, run_id)
             except ApiError as exc:
@@ -464,11 +489,11 @@ def render_simulation_results(base_url: str, run_id: str) -> None:
                         alt.Chart(normal_frame)
                         .mark_tick(color=PRIMARY, thickness=2, size=24)
                         .encode(
-                            x=alt.X("value:Q", title="Valor"),
+                            x=alt.X("value:Q", title="Wert"),
                             y=alt.Y("path:O", title=None, axis=None),
                             tooltip=[
-                                alt.Tooltip("path:N", title="Trayectoria"),
-                                alt.Tooltip("value:Q", title="Valor", format=",.4f"),
+                                alt.Tooltip("path:N", title="Pfad"),
+                                alt.Tooltip("value:Q", title="Wert", format=",.4f"),
                             ],
                         )
                         .properties(height=300)
@@ -476,17 +501,17 @@ def render_simulation_results(base_url: str, run_id: str) -> None:
                     st.altair_chart(
                         chart,
                         alt=(
-                            "Muestras del modelo Normal: una extracción por trayectoria "
-                            "en un eje horizontal"
+                            "Stichproben des Normal-Modells: eine Ziehung pro Pfad "
+                            "auf einer horizontalen Achse"
                         ),
                     )
                     st.caption(
-                        "El modelo Normal no tiene dimensión temporal; "
-                        "cada trayectoria es una única extracción."
+                        "Das Normal-Modell hat keine Zeitdimension; "
+                        "jeder Pfad ist eine einzelne Ziehung."
                     )
                 else:
                     dt = trajectories.get("dt") or 1.0
-                    time_label = "Tiempo (años)" if dt != 1.0 else "Paso"
+                    time_label = "Zeit (Jahre)" if dt != 1.0 else "Schritt"
                     records = [
                         {
                             "path": f"#{path_index + 1}",
@@ -506,14 +531,14 @@ def render_simulation_results(base_url: str, run_id: str) -> None:
                             x=alt.X("time:Q", title=time_label),
                             y=alt.Y(
                                 "value:Q",
-                                title="Valor",
+                                title="Wert",
                                 scale=alt.Scale(zero=False),
                             ),
                             detail="path:N",
                             tooltip=[
-                                alt.Tooltip("path:N", title="Trayectoria"),
-                                alt.Tooltip("step:Q", title="Paso"),
-                                alt.Tooltip("value:Q", title="Valor", format=",.4f"),
+                                alt.Tooltip("path:N", title="Pfad"),
+                                alt.Tooltip("step:Q", title="Schritt"),
+                                alt.Tooltip("value:Q", title="Wert", format=",.4f"),
                             ],
                         )
                     )
@@ -527,13 +552,13 @@ def render_simulation_results(base_url: str, run_id: str) -> None:
                     st.altair_chart(
                         chart,
                         alt=(
-                            f"{len(paths)} trayectorias de valores a lo largo de "
-                            f"{len(steps)} puntos temporales, con su media en ámbar"
+                            f"{len(paths)} Pfade über {len(steps)} Zeitpunkte, "
+                            "mit bernsteinfarbenem Mittelwert"
                         ),
                     )
                     st.caption(
-                        f"{len(paths)} trayectorias de {trajectories['total_paths']:,} "
-                        "muestreadas · línea ámbar: media."
+                        f"{len(paths)} von {fmt_int(trajectories['total_paths'])} "
+                        "Pfaden abgetastet · bernsteinfarbene Linie: Mittelwert."
                     )
 
     st.write("")
@@ -541,61 +566,61 @@ def render_simulation_results(base_url: str, run_id: str) -> None:
 
     with stats_column:
         with st.container(border=True):
-            st.markdown("**Estadísticos de los valores terminales**")
+            st.markdown("**Statistiken der Endwerte**")
             stats_rows: list[tuple[str, str]] = [
-                ("Media", fmt_number(summary.get("mean"))),
-                ("Desviación típica", fmt_number(summary.get("std"))),
-                ("Mínimo", fmt_number(summary.get("minimum"))),
+                ("Mittelwert", fmt_number(summary.get("mean"))),
+                ("Standardabweichung", fmt_number(summary.get("std"))),
+                ("Minimum", fmt_number(summary.get("minimum"))),
                 ("P05", fmt_number(summary.get("p05"))),
                 ("P25", fmt_number(summary.get("p25"))),
-                ("Mediana (P50)", fmt_number(summary.get("p50"))),
+                ("Median (P50)", fmt_number(summary.get("p50"))),
                 ("P75", fmt_number(summary.get("p75"))),
                 ("P95", fmt_number(summary.get("p95"))),
-                ("Máximo", fmt_number(summary.get("maximum"))),
+                ("Maximum", fmt_number(summary.get("maximum"))),
                 ("VaR 95 % (P05)", fmt_number(summary.get("var_95"))),
                 (
-                    "Expected shortfall 95 %",
+                    "Expected Shortfall 95 %",
                     fmt_number(summary.get("expected_shortfall_95")),
                 ),
             ]
             if summary.get("prob_above_threshold") is not None:
                 stats_rows.append(
                     (
-                        "P(X > umbral)",
-                        f"{summary['prob_above_threshold']:.2%}",
+                        "P(X > Schwelle)",
+                        fmt_percent(summary["prob_above_threshold"]),
                     )
                 )
 
             st.dataframe(
-                pd.DataFrame(stats_rows, columns=["Métrica", "Valor"]),
+                pd.DataFrame(stats_rows, columns=["Kennzahl", "Wert"]),
                 hide_index=True,
                 height="content",
-                alt="Tabla de estadísticos de la simulación",
+                alt="Tabelle mit den Simulationsstatistiken",
             )
 
     with details_column:
         with st.container(border=True):
-            st.markdown("**Ejecución**")
+            st.markdown("**Lauf**")
             details_rows = [
-                ("Modelo", run["model"].upper()),
-                ("Trayectorias", f"{run['n_paths']:,}"),
-                ("Pasos", f"{run['n_steps']:,}"),
+                ("Modell", run["model"].upper()),
+                ("Pfade", fmt_int(run["n_paths"])),
+                ("Schritte", fmt_int(run["n_steps"])),
                 (
-                    "Semilla",
-                    f"{run['seed']:,}" if run["seed"] is not None else "aleatoria",
+                    "Seed",
+                    fmt_int(run["seed"]) if run["seed"] is not None else "zufällig",
                 ),
-                ("Umbral", fmt_number(threshold)),
-                ("Duración", fmt_duration(run.get("duration_ms"))),
-                ("Finalizada", fmt_datetime(run.get("finished_at"))),
+                ("Schwelle", fmt_number(threshold)),
+                ("Dauer", fmt_duration(run.get("duration_ms"))),
+                ("Beendet", fmt_datetime(run.get("finished_at"))),
             ]
             st.dataframe(
-                pd.DataFrame(details_rows, columns=["Campo", "Valor"]),
+                pd.DataFrame(details_rows, columns=["Feld", "Wert"]),
                 hide_index=True,
                 height="content",
-                alt="Tabla con los parámetros de ejecución",
+                alt="Tabelle mit den Laufparametern",
             )
 
-    with st.expander("Parámetros y respuesta JSON", icon=":material/data_object:"):
+    with st.expander("Parameter und JSON-Antwort", icon=":material/data_object:"):
         st.json(run)
 
 
@@ -605,15 +630,15 @@ def render_simulation_results(base_url: str, run_id: str) -> None:
 
 
 def render_simulation_tab(api_url: str) -> None:
-    st.subheader("Nueva simulación")
+    st.subheader("Neue Simulation")
     st.caption(
-        "Los parámetros se validan en la API. Cada ejecución se guarda en PostgreSQL "
-        "y es reproducible con su semilla."
+        "Die Parameter werden in der API validiert. Jeder Lauf wird in PostgreSQL "
+        "gespeichert und ist mit seinem Seed reproduzierbar."
     )
 
     model_label = (
         st.segmented_control(
-            "Modelo estocástico",
+            "Stochastisches Modell",
             options=list(MODELS),
             default="GBM",
             required=True,
@@ -626,49 +651,49 @@ def render_simulation_tab(api_url: str) -> None:
 
     with st.form("simulation_form", border=True):
         name = st.text_input(
-            "Nombre de la simulación",
-            placeholder=f"{model_label} · 1.000 trayectorias",
+            "Name der Simulation",
+            placeholder=f"{model_label} · 1.000 Pfade",
             max_chars=200,
             key="simulation_name",
         )
 
-        st.markdown("**Parámetros del modelo**")
+        st.markdown("**Modellparameter**")
         if model["kind"] == "gbm":
             parameter_columns = st.columns(4)
             s0 = parameter_columns[0].number_input(
-                "Valor inicial (S₀)",
+                "Startwert (S₀)",
                 min_value=0.01,
                 value=100.0,
                 step=1.0,
-                help="Precio o magnitud de partida. Debe ser mayor que 0.",
+                help="Ausgangspreis oder -größe. Muss größer als 0 sein.",
                 key="gbm_s0",
             )
             mu = parameter_columns[1].number_input(
-                "Deriva anual (μ)",
+                "Jährliche Drift (μ)",
                 value=0.08,
                 step=0.01,
                 format="%.4f",
-                help="Tasa de crecimiento esperada por año.",
+                help="Erwartete Wachstumsrate pro Jahr.",
                 key="gbm_mu",
             )
             sigma = parameter_columns[2].number_input(
-                "Volatilidad anual (σ)",
+                "Jährliche Volatilität (σ)",
                 min_value=0.001,
                 max_value=5.0,
                 value=0.20,
                 step=0.01,
                 format="%.4f",
-                help="Volatilidad anual. Debe ser mayor que 0 y como máximo 5.",
+                help="Jährliche Volatilität. Muss größer als 0 und höchstens 5 sein.",
                 key="gbm_sigma",
             )
             dt = parameter_columns[3].number_input(
-                "Paso temporal (dt)",
+                "Zeitschritt (dt)",
                 min_value=0.0001,
                 max_value=1.0,
                 value=1 / 252,
                 step=0.0001,
                 format="%.6f",
-                help="Fracción de año entre puntos. 1/252 equivale a un día bursátil.",
+                help="Jahresanteil zwischen zwei Punkten. 1/252 entspricht einem Börsentag.",
                 key="gbm_dt",
             )
             params: dict[str, Any] = {
@@ -683,48 +708,48 @@ def render_simulation_tab(api_url: str) -> None:
         elif model["kind"] == "ou":
             parameter_columns = st.columns(5)
             x0 = parameter_columns[0].number_input(
-                "Valor inicial (x₀)",
+                "Startwert (x₀)",
                 value=0.0,
                 step=1.0,
                 format="%.4f",
-                help="Valor de la serie en el instante inicial.",
+                help="Wert der Reihe zum Startzeitpunkt.",
                 key="ou_x0",
             )
             mu = parameter_columns[1].number_input(
-                "Media de largo plazo (μ)",
+                "Langfristiger Mittelwert (μ)",
                 value=0.0,
                 step=1.0,
                 format="%.4f",
-                help="Nivel al que el proceso tiende a volver.",
+                help="Niveau, zu dem der Prozess tendenziell zurückkehrt.",
                 key="ou_mu",
             )
             theta = parameter_columns[2].number_input(
-                "Reversión (θ)",
+                "Reversionsrate (θ)",
                 min_value=0.0001,
                 value=1.5,
                 step=0.1,
                 format="%.4f",
-                help="Velocidad de reversión a la media. Debe ser mayor que 0.",
+                help="Geschwindigkeit der Mean-Reversion. Muss größer als 0 sein.",
                 key="ou_theta",
             )
             sigma = parameter_columns[3].number_input(
-                "Volatilidad (σ)",
+                "Volatilität (σ)",
                 min_value=0.0001,
                 max_value=100.0,
                 value=0.30,
                 step=0.05,
                 format="%.4f",
-                help="Intensidad del ruido. Debe ser mayor que 0.",
+                help="Rauschintensität. Muss größer als 0 sein.",
                 key="ou_sigma",
             )
             dt = parameter_columns[4].number_input(
-                "Paso temporal (dt)",
+                "Zeitschritt (dt)",
                 min_value=0.0001,
                 max_value=1.0,
                 value=1 / 252,
                 step=0.0001,
                 format="%.6f",
-                help="Fracción de año entre puntos.",
+                help="Jahresanteil zwischen zwei Punkten.",
                 key="ou_dt",
             )
             params = {
@@ -740,20 +765,20 @@ def render_simulation_tab(api_url: str) -> None:
         else:
             parameter_columns = st.columns(2)
             mean = parameter_columns[0].number_input(
-                "Media (μ)",
+                "Mittelwert (μ)",
                 value=100.0,
                 step=1.0,
                 format="%.4f",
-                help="Centro de la distribución normal.",
+                help="Zentrum der Normalverteilung.",
                 key="normal_mean",
             )
             std = parameter_columns[1].number_input(
-                "Desviación típica (σ)",
+                "Standardabweichung (σ)",
                 min_value=0.0001,
                 value=15.0,
                 step=1.0,
                 format="%.4f",
-                help="Dispersión de la distribución. Debe ser mayor que 0.",
+                help="Streuung der Verteilung. Muss größer als 0 sein.",
                 key="normal_std",
             )
             params = {"kind": "normal", "mean": mean, "std": std}
@@ -761,25 +786,25 @@ def render_simulation_tab(api_url: str) -> None:
             show_steps = False
 
         st.divider()
-        st.markdown("**Carga de trabajo**")
+        st.markdown("**Simulationsumfang**")
         workload_columns = st.columns(4 if show_steps else 3)
         n_paths = workload_columns[0].number_input(
-            "Trayectorias",
+            "Pfade",
             min_value=100,
             max_value=MAX_PATHS,
             value=1_000,
             step=100,
-            help="Número de caminos a simular. La API acepta entre 100 y 20.000.",
+            help="Anzahl der zu simulierenden Pfade. Die API akzeptiert 100 bis 20.000.",
             key="n_paths",
         )
         if show_steps:
             n_steps = workload_columns[1].number_input(
-                "Pasos",
+                "Schritte",
                 min_value=1,
                 max_value=MAX_STEPS,
                 value=n_steps_default,
                 step=1,
-                help="Puntos por trayectoria. La API acepta como máximo 5.000.",
+                help="Punkte pro Pfad. Die API akzeptiert maximal 5.000.",
                 key="n_steps",
             )
             seed_column = workload_columns[2]
@@ -790,44 +815,45 @@ def render_simulation_tab(api_url: str) -> None:
             threshold_column = workload_columns[2]
 
         seed = seed_column.number_input(
-            "Semilla",
+            "Seed",
             min_value=0,
             max_value=2**53 - 1,
             value=42,
             step=1,
-            help="Misma semilla y mismos parámetros producen exactamente el mismo resultado.",
+            help="Gleicher Seed und gleiche Parameter erzeugen exakt dasselbe Ergebnis.",
             key="seed",
         )
         threshold = threshold_column.number_input(
-            "Umbral (opcional)",
+            "Schwelle (optional)",
             value=None,
             step=1.0,
             format="%.4f",
-            placeholder="Sin umbral",
-            help="Si se indica, la API calcula P(X > umbral).",
+            placeholder="Keine Schwelle",
+            help="Wenn angegeben, berechnet die API P(X > Schwelle).",
             key="threshold",
         )
 
         submitted = st.form_submit_button(
-            "Ejecutar simulación",
+            "Simulation starten",
             type="primary",
             icon=":material/play_arrow:",
         )
 
     st.caption(
-        f"Límites de la instancia: {MAX_PATHS:,} trayectorias, {MAX_STEPS:,} pasos "
-        f"y {MAX_CELLS:,} celdas (trayectorias × pasos) por ejecución."
+        f"Instanzgrenzen: {fmt_int(MAX_PATHS)} Pfade, {fmt_int(MAX_STEPS)} Schritte "
+        f"und {fmt_int(MAX_CELLS)} Zellen (Pfade × Schritte) pro Lauf."
     )
 
     if submitted:
         if n_paths * n_steps > MAX_CELLS:
             st.error(
-                f"La carga solicitada ({n_paths * n_steps:,} celdas) supera el límite "
-                f"de {MAX_CELLS:,}. Reduce el número de trayectorias o de pasos."
+                f"Die angeforderte Last ({fmt_int(n_paths * n_steps)} Zellen) überschreitet "
+                f"das Limit von {fmt_int(MAX_CELLS)}. Reduzieren Sie die Anzahl der Pfade "
+                "oder Schritte."
             )
         else:
             payload = {
-                "name": name.strip() or f"{model_label} · {n_paths:,} trayectorias",
+                "name": name.strip() or f"{model_label} · {fmt_int(n_paths)} Pfade",
                 "params": params,
                 "n_paths": int(n_paths),
                 "n_steps": int(n_steps),
@@ -835,7 +861,7 @@ def render_simulation_tab(api_url: str) -> None:
                 "threshold": threshold,
             }
 
-            status_box = st.status("Ejecutando la simulación…", expanded=False)
+            status_box = st.status("Simulation wird ausgeführt…", expanded=False)
             try:
                 run = api_request(
                     api_url,
@@ -845,7 +871,7 @@ def render_simulation_tab(api_url: str) -> None:
                 )
             except ApiError as exc:
                 status_box.update(
-                    label="No se pudo ejecutar la simulación",
+                    label="Die Simulation konnte nicht ausgeführt werden",
                     state="error",
                     expanded=True,
                 )
@@ -858,31 +884,31 @@ def render_simulation_tab(api_url: str) -> None:
                 if run["status"] == "completed":
                     status_box.update(
                         label=(
-                            f"Simulación completada en {run['duration_ms']:,} ms · "
-                            f"{run['n_paths']:,} trayectorias"
+                            f"Simulation in {fmt_int(run['duration_ms'])} ms abgeschlossen · "
+                            f"{fmt_int(run['n_paths'])} Pfade"
                         ),
                         state="complete",
                     )
                 else:
                     status_box.update(
                         label=(
-                            "La simulación terminó con estado "
-                            f"{STATUS_LABELS.get(run['status'], run['status']).lower()}"
+                            "Die Simulation endete mit dem Status "
+                            f"„{STATUS_LABELS.get(run['status'], run['status']).lower()}“"
                         ),
                         state="error",
                         expanded=True,
                     )
-                    st.error(run.get("error") or "La simulación no produjo resultados.")
+                    st.error(run.get("error") or "Die Simulation hat keine Ergebnisse geliefert.")
 
     last_run_id = st.session_state.get("last_run_id")
     if last_run_id:
         st.divider()
-        st.subheader("Resultados")
+        st.subheader("Ergebnisse")
         render_simulation_results(api_url, last_run_id)
     else:
         st.info(
-            "Configura los parámetros y pulsa **Ejecutar simulación** para ver el "
-            "histograma, las trayectorias y los estadísticos."
+            "Konfigurieren Sie die Parameter und klicken Sie auf **Simulation starten**, "
+            "um Histogramm, Pfade und Statistiken zu sehen."
         )
 
 
@@ -893,52 +919,52 @@ def render_simulation_tab(api_url: str) -> None:
 
 def render_dataset_upload(api_url: str) -> None:
     with st.form("dataset_upload_form", border=True, clear_on_submit=True):
-        st.markdown("**Subir un CSV**")
+        st.markdown("**CSV hochladen**")
         upload_columns = st.columns([2, 2, 1, 1])
         uploaded_file = upload_columns[0].file_uploader(
-            "Archivo CSV",
+            "CSV-Datei",
             type=["csv"],
-            help="Máximo 10 MB. Se detectan codificación, separador y cabecera.",
+            help="Maximal 10 MB. Kodierung, Trennzeichen und Kopfzeile werden erkannt.",
         )
         dataset_name = upload_columns[1].text_input(
-            "Nombre del dataset",
-            placeholder="Medidas del reactor",
+            "Name des Datensatzes",
+            placeholder="Reaktormessungen",
             max_chars=200,
         )
         default_variable = upload_columns[2].text_input(
-            "Variable por defecto",
+            "Standardvariable",
             value="value",
             max_chars=80,
-            help="Se usa cuando el CSV no trae una columna 'variable'.",
+            help="Wird verwendet, wenn die CSV keine Spalte 'variable' enthält.",
         )
         default_unit = upload_columns[3].text_input(
-            "Unidad por defecto",
+            "Standardeinheit",
             max_chars=32,
             placeholder="bar",
         )
 
-        with st.expander("Opciones avanzadas de columnas", icon=":material/tune:"):
+        with st.expander("Erweiterte Spaltenoptionen", icon=":material/tune:"):
             advanced_columns = st.columns(2)
             timestamp_column = advanced_columns[0].text_input(
-                "Columna de tiempo",
+                "Zeitspalte",
                 value="timestamp",
                 max_chars=80,
             )
             value_column = advanced_columns[1].text_input(
-                "Columna de valor",
+                "Wertspalte",
                 value="value",
                 max_chars=80,
             )
 
         upload_submitted = st.form_submit_button(
-            "Procesar y guardar",
+            "Verarbeiten und speichern",
             type="primary",
             icon=":material/upload:",
         )
 
     if upload_submitted:
         if uploaded_file is None:
-            st.warning("Selecciona un archivo CSV antes de enviarlo.")
+            st.warning("Wählen Sie eine CSV-Datei aus, bevor Sie sie hochladen.")
         else:
             form_data = {
                 "name": dataset_name.strip() or uploaded_file.name,
@@ -949,7 +975,7 @@ def render_dataset_upload(api_url: str) -> None:
             if default_unit.strip():
                 form_data["unit"] = default_unit.strip()
 
-            status_box = st.status("Procesando el CSV con Pandas…", expanded=False)
+            status_box = st.status("CSV wird mit Pandas verarbeitet…", expanded=False)
             try:
                 dataset = api_request(
                     api_url,
@@ -965,28 +991,32 @@ def render_dataset_upload(api_url: str) -> None:
                     data=form_data,
                 )
             except ApiError as exc:
-                status_box.update(label="El CSV no se pudo procesar", state="error", expanded=True)
+                status_box.update(
+                    label="Die CSV-Datei konnte nicht verarbeitet werden",
+                    state="error",
+                    expanded=True,
+                )
                 render_api_error(exc)
             else:
                 st.session_state["dataset_choice"] = dataset["id"]
                 refresh_dataset_caches()
                 status_box.update(
                     label=(
-                        f"Dataset guardado · {dataset['row_count']:,} medidas · "
-                        f"{dataset['outlier_rows']:,} outliers marcados"
+                        f"Datensatz gespeichert · {fmt_int(dataset['row_count'])} Messungen · "
+                        f"{fmt_int(dataset['outlier_rows'])} Ausreißer markiert"
                     ),
                     state="complete",
                 )
                 if dataset.get("rejected_rows"):
                     st.warning(
-                        f"{dataset['rejected_rows']:,} filas se rechazaron por timestamps "
-                        "o valores inválidos. Revisa el detalle en la ficha ETL."
+                        f"{fmt_int(dataset['rejected_rows'])} Zeilen wurden wegen ungültiger "
+                        "Zeitstempel oder Werte verworfen. Details finden Sie im ETL-Bericht."
                     )
 
     sample_path = Path(__file__).resolve().parent.parent / "data" / "sample_measurements.csv"
     if sample_path.exists():
         st.download_button(
-            "Descargar CSV de ejemplo",
+            "Beispiel-CSV herunterladen",
             data=sample_path.read_bytes(),
             file_name="sample_measurements.csv",
             mime="text/csv",
@@ -1005,45 +1035,45 @@ def render_dataset_details(api_url: str, dataset: dict[str, Any]) -> None:
     st.markdown(f"**{dataset['name']}**")
     st.caption(
         f"`{dataset['id'][:8]}` · {dataset['source_filename']} · "
-        f"subido el {fmt_datetime(dataset['created_at'])} · "
+        f"hochgeladen am {fmt_datetime(dataset['created_at'])} · "
         f"sha256 `{dataset['checksum_sha256'][:12]}…`"
     )
 
     if dataset.get("status") == "failed":
-        st.error(dataset.get("error") or "El ETL falló al procesar este dataset.")
+        st.error(dataset.get("error") or "Der ETL-Prozess ist bei diesem Datensatz fehlgeschlagen.")
 
     metric_columns = st.columns(4)
-    metric_columns[0].metric("Medidas", f"{stats['row_count']:,}", border=True)
-    metric_columns[1].metric("Filas rechazadas", f"{stats['rejected_rows']:,}", border=True)
-    metric_columns[2].metric("Outliers (IQR)", f"{stats['outlier_rows']:,}", border=True)
-    metric_columns[3].metric("Variables", f"{len(stats['variables']):,}", border=True)
+    metric_columns[0].metric("Messungen", fmt_int(stats["row_count"]), border=True)
+    metric_columns[1].metric("Verworfene Zeilen", fmt_int(stats["rejected_rows"]), border=True)
+    metric_columns[2].metric("Ausreißer (IQR)", fmt_int(stats["outlier_rows"]), border=True)
+    metric_columns[3].metric("Variablen", fmt_int(len(stats["variables"])), border=True)
 
     if not stats["variables"]:
-        st.info("Este dataset no contiene variables válidas.")
+        st.info("Dieser Datensatz enthält keine gültigen Variablen.")
         return
 
     variables_frame = pd.DataFrame(stats["variables"]).rename(
         columns={
             "variable": "Variable",
-            "count": "Medidas",
-            "mean": "Media",
-            "std": "Desv. típica",
-            "minimum": "Mínimo",
-            "maximum": "Máximo",
-            "outliers": "Outliers",
+            "count": "Messungen",
+            "mean": "Mittelwert",
+            "std": "Standardabweichung",
+            "minimum": "Minimum",
+            "maximum": "Maximum",
+            "outliers": "Ausreißer",
         }
     )
     st.dataframe(
         variables_frame,
         hide_index=True,
         height="content",
-        alt="Estadísticos por variable del dataset",
+        alt="Statistiken pro Variable des Datensatzes",
     )
 
     variable_names = [item["variable"] for item in stats["variables"]]
     variable_column, _ = st.columns([2, 3])
     selected_variable = variable_column.selectbox(
-        "Variable para la serie temporal",
+        "Variable für die Zeitreihe",
         options=variable_names,
         key=f"dataset_variable_{dataset['id']}",
     )
@@ -1055,11 +1085,11 @@ def render_dataset_details(api_url: str, dataset: dict[str, Any]) -> None:
         return
 
     if frame.empty:
-        st.info("No hay medidas disponibles para esta variable.")
+        st.info("Für diese Variable sind keine Messungen verfügbar.")
         return
 
     with st.container(border=True):
-        st.markdown(f"**Serie temporal · {selected_variable}**")
+        st.markdown(f"**Zeitreihe · {selected_variable}**")
         unit = frame["unit"].dropna().iloc[0] if frame["unit"].notna().any() else None
         y_title = f"{selected_variable} ({unit})" if unit else selected_variable
 
@@ -1070,7 +1100,7 @@ def render_dataset_details(api_url: str, dataset: dict[str, Any]) -> None:
                 x=alt.X("recorded_at:T", title=None),
                 y=alt.Y("value:Q", title=y_title, scale=alt.Scale(zero=False)),
                 tooltip=[
-                    alt.Tooltip("recorded_at:T", title="Fecha", format="%Y-%m-%d %H:%M"),
+                    alt.Tooltip("recorded_at:T", title="Datum", format="%d.%m.%Y %H:%M"),
                     alt.Tooltip("value:Q", title=selected_variable, format=",.4f"),
                 ],
             )
@@ -1086,8 +1116,8 @@ def render_dataset_details(api_url: str, dataset: dict[str, Any]) -> None:
                     x="recorded_at:T",
                     y="value:Q",
                     tooltip=[
-                        alt.Tooltip("recorded_at:T", title="Fecha", format="%Y-%m-%d %H:%M"),
-                        alt.Tooltip("value:Q", title="Valor atípico", format=",.4f"),
+                        alt.Tooltip("recorded_at:T", title="Datum", format="%d.%m.%Y %H:%M"),
+                        alt.Tooltip("value:Q", title="Ausreißer", format=",.4f"),
                     ],
                 )
             )
@@ -1097,15 +1127,18 @@ def render_dataset_details(api_url: str, dataset: dict[str, Any]) -> None:
         st.altair_chart(
             chart,
             alt=(
-                f"Serie temporal de {selected_variable} con {len(outliers)} "
-                "valores atípicos resaltados en rojo"
+                f"Zeitreihe von {selected_variable} mit {len(outliers)} "
+                "rot hervorgehobenen Ausreißern"
             ),
         )
-        st.caption(f"{fetched:,} de {total:,} medidas · puntos rojos: outliers detectados con IQR.")
+        st.caption(
+            f"{fmt_int(fetched)} von {fmt_int(total)} Messungen · rote Punkte: "
+            "mit IQR erkannte Ausreißer."
+        )
 
     with st.container(horizontal=True, horizontal_alignment="right"):
         st.download_button(
-            "Descargar medidas (CSV)",
+            "Messungen herunterladen (CSV)",
             data=frame.to_csv(index=False).encode("utf-8"),
             file_name=f"{dataset['name'][:40].replace(' ', '_')}_{selected_variable}.csv",
             mime="text/csv",
@@ -1113,33 +1146,34 @@ def render_dataset_details(api_url: str, dataset: dict[str, Any]) -> None:
             type="tertiary",
         )
 
-    with st.expander(f"Ver medidas ({fetched:,})", icon=":material/table_rows:"):
+    with st.expander(f"Messungen anzeigen ({fmt_int(fetched)})", icon=":material/table_rows:"):
         display_frame = frame.head(500).rename(
             columns={
-                "recorded_at": "Fecha",
+                "recorded_at": "Datum",
                 "variable": "Variable",
-                "value": "Valor",
-                "unit": "Unidad",
-                "is_outlier": "Outlier",
+                "value": "Wert",
+                "unit": "Einheit",
+                "is_outlier": "Ausreißer",
             }
         )
         st.dataframe(
-            display_frame[["Fecha", "Variable", "Valor", "Unidad", "Outlier"]],
+            display_frame[["Datum", "Variable", "Wert", "Einheit", "Ausreißer"]],
             hide_index=True,
             height=280,
-            alt="Tabla de medidas del dataset",
+            alt="Tabelle mit den Messungen des Datensatzes",
         )
 
-    with st.expander("Ficha ETL del dataset", icon=":material/fact_check:"):
+    with st.expander("ETL-Bericht des Datensatzes", icon=":material/fact_check:"):
         st.json(dataset)
         st.json(stats)
 
 
 def render_datasets_tab(api_url: str) -> None:
-    st.subheader("Datasets experimentales")
+    st.subheader("Experimentelle Datensätze")
     st.caption(
-        "El ETL de Pandas valida tipos, elimina duplicados, marca outliers con el "
-        "rango intercuartílico (IQR) y registra un checksum SHA-256 del archivo."
+        "Die Pandas-ETL validiert Datentypen, entfernt Duplikate, markiert Ausreißer "
+        "über den Interquartilsabstand (IQR) und protokolliert eine SHA-256-Prüfsumme "
+        "der Datei."
     )
 
     render_dataset_upload(api_url)
@@ -1153,7 +1187,10 @@ def render_datasets_tab(api_url: str) -> None:
 
     items = datasets["items"]
     if not items:
-        st.info("Todavía no hay datasets. Sube un CSV o usa el archivo de ejemplo.")
+        st.info(
+            "Noch keine Datensätze vorhanden. Laden Sie eine CSV-Datei hoch oder "
+            "verwenden Sie die Beispieldatei."
+        )
         return
 
     by_id = {item["id"]: item for item in items}
@@ -1163,12 +1200,12 @@ def render_datasets_tab(api_url: str) -> None:
         default_id = options[0]
 
     selected_id = st.selectbox(
-        "Dataset",
+        "Datensatz",
         options=options,
         index=options.index(default_id),
         format_func=lambda dataset_id: (
-            f"{by_id[dataset_id]['name']} · {by_id[dataset_id]['row_count']:,} medidas · "
-            f"{fmt_datetime(by_id[dataset_id]['created_at'])}"
+            f"{by_id[dataset_id]['name']} · {fmt_int(by_id[dataset_id]['row_count'])} "
+            f"Messungen · {fmt_datetime(by_id[dataset_id]['created_at'])}"
         ),
         key="dataset_choice",
     )
@@ -1182,17 +1219,17 @@ def render_datasets_tab(api_url: str) -> None:
 
 
 def render_history_tab(api_url: str) -> None:
-    st.subheader("Historial de ejecuciones")
-    st.caption("Cada ejecución conserva sus parámetros, su semilla y sus resultados en PostgreSQL.")
+    st.subheader("Simulationsverlauf")
+    st.caption("Jeder Lauf behält seine Parameter, seinen Seed und seine Ergebnisse in PostgreSQL.")
 
     filter_label = st.segmented_control(
-        "Filtrar por estado",
-        options=["Todas", "Completadas", "Fallidas"],
-        default="Todas",
+        "Nach Status filtern",
+        options=["Alle", "Abgeschlossen", "Fehlgeschlagen"],
+        default="Alle",
         key="history_status",
     )
-    status_lookup = {"Todas": None, "Completadas": "completed", "Fallidas": "failed"}
-    run_status = status_lookup.get(filter_label or "Todas")
+    status_lookup = {"Alle": None, "Abgeschlossen": "completed", "Fehlgeschlagen": "failed"}
+    run_status = status_lookup.get(filter_label or "Alle")
 
     try:
         runs = load_runs(api_url, run_status)
@@ -1202,29 +1239,29 @@ def render_history_tab(api_url: str) -> None:
 
     items = runs["items"]
     if not items:
-        st.info("No hay ejecuciones que coincidan con el filtro.")
+        st.info("Keine Läufe entsprechen dem Filter.")
         return
 
     completed = sum(1 for item in items if item["status"] == "completed")
     failed = sum(1 for item in items if item["status"] == "failed")
     metric_columns = st.columns(3)
-    metric_columns[0].metric("Ejecuciones", f"{runs['total']:,}", border=True)
-    metric_columns[1].metric("Completadas", f"{completed:,}", border=True)
-    metric_columns[2].metric("Fallidas", f"{failed:,}", border=True)
+    metric_columns[0].metric("Läufe", fmt_int(runs["total"]), border=True)
+    metric_columns[1].metric("Abgeschlossen", fmt_int(completed), border=True)
+    metric_columns[2].metric("Fehlgeschlagen", fmt_int(failed), border=True)
 
     table_rows = []
     for item in items:
         summary = item.get("summary") or {}
         table_rows.append(
             {
-                "Fecha": fmt_datetime(item["created_at"]).replace(" UTC", ""),
-                "Nombre": item["name"],
-                "Modelo": item["model"].upper(),
-                "Estado": STATUS_LABELS.get(item["status"], item["status"]),
-                "Trayectorias": item["n_paths"],
-                "Pasos": item["n_steps"],
-                "Media": fmt_number(summary.get("mean")),
-                "Duración": fmt_duration(item.get("duration_ms")),
+                "Datum": fmt_datetime(item["created_at"]).replace(" UTC", ""),
+                "Name": item["name"],
+                "Modell": item["model"].upper(),
+                "Status": STATUS_LABELS.get(item["status"], item["status"]),
+                "Pfade": item["n_paths"],
+                "Schritte": item["n_steps"],
+                "Mittelwert": fmt_number(summary.get("mean")),
+                "Dauer": fmt_duration(item.get("duration_ms")),
             }
         )
 
@@ -1232,7 +1269,7 @@ def render_history_tab(api_url: str) -> None:
         pd.DataFrame(table_rows),
         hide_index=True,
         height="content",
-        alt="Tabla con el historial de simulaciones",
+        alt="Tabelle mit dem Simulationsverlauf",
     )
 
     by_id = {item["id"]: item for item in items}
@@ -1242,7 +1279,7 @@ def render_history_tab(api_url: str) -> None:
         default_id = options[0]
 
     selected_id = st.selectbox(
-        "Abrir una ejecución",
+        "Einen Lauf öffnen",
         options=options,
         index=options.index(default_id),
         format_func=lambda run_id: (
@@ -1268,25 +1305,29 @@ with st.sidebar:
 
     api_url = (
         st.text_input(
-            "URL de la API",
+            "API-URL",
             value=default_api_url(),
-            help="Local: http://localhost:8000 · Producción: la URL de Render.",
+            help="Lokal: http://localhost:8000 · Produktion: die URL von Render.",
         )
         or DEFAULT_API_URL
     ).rstrip("/")
 
     api_status = load_api_status(api_url)
     if api_status["error"]:
-        st.badge("API no disponible", color="red", icon=":material/cloud_off:")
-        with st.expander("Detalle de la conexión", icon=":material/error:"):
+        st.badge("API nicht verfügbar", color="red", icon=":material/cloud_off:")
+        with st.expander("Verbindungsdetails", icon=":material/error:"):
             st.caption(api_status["error"])
     else:
-        st.badge("API y base de datos operativas", color="green", icon=":material/check_circle:")
+        st.badge(
+            "API und Datenbank betriebsbereit",
+            color="green",
+            icon=":material/check_circle:",
+        )
         health = api_status["health"]
-        st.caption(f"Versión {health['version']} · entorno `{health['environment']}`")
+        st.caption(f"Version {health['version']} · Umgebung `{health['environment']}`")
 
     with st.container(horizontal=True):
-        if st.button("Reintentar", icon=":material/refresh:", type="tertiary"):
+        if st.button("Erneut versuchen", icon=":material/refresh:", type="tertiary"):
             load_api_status.clear()
             st.rerun()
         st.link_button(
@@ -1297,52 +1338,54 @@ with st.sidebar:
         )
 
     st.divider()
-    st.markdown("**Límites por ejecución**")
+    st.markdown("**Grenzen pro Lauf**")
     st.caption(
-        f"{MAX_PATHS:,} trayectorias · {MAX_STEPS:,} pasos · "
-        f"{MAX_CELLS:,} celdas. Las ejecuciones son síncronas y quedan persistidas."
+        f"{fmt_int(MAX_PATHS)} Pfade · {fmt_int(MAX_STEPS)} Schritte · "
+        f"{fmt_int(MAX_CELLS)} Zellen. Die Läufe sind synchron und werden dauerhaft "
+        "gespeichert."
     )
     st.divider()
     st.caption(
-        "Proyecto de portafolio backend: API REST, motor Monte Carlo con NumPy, "
-        "ETL con Pandas y persistencia en PostgreSQL."
+        "Backend-Portfolioprojekt: REST-API, Monte-Carlo-Engine mit NumPy, "
+        "ETL mit Pandas und Persistenz in PostgreSQL."
     )
 
 st.title(":material/science: MonteCarlo Lab")
 st.caption(
-    "Simula procesos estocásticos, explora su distribución y analiza medidas "
-    "experimentales. Todos los resultados quedan guardados en PostgreSQL."
+    "Simulieren Sie stochastische Prozesse, erkunden Sie ihre Verteilung und "
+    "analysieren Sie experimentelle Messungen. Alle Ergebnisse werden in PostgreSQL "
+    "gespeichert."
 )
 
 overview = load_overview(api_url) if not api_status["error"] else None
 if overview:
     overview_columns = st.columns(4)
     overview_columns[0].metric(
-        "Simulaciones",
-        f"{overview['simulations_total']:,}",
+        "Simulationen",
+        fmt_int(overview["simulations_total"]),
         border=True,
     )
     overview_columns[1].metric(
-        "Trayectorias",
-        f"{overview['paths_simulated']:,}",
+        "Pfade",
+        fmt_int(overview["paths_simulated"]),
         border=True,
     )
     overview_columns[2].metric(
-        "Datasets",
-        f"{overview['datasets_total']:,}",
+        "Datensätze",
+        fmt_int(overview["datasets_total"]),
         border=True,
     )
     overview_columns[3].metric(
-        "Medidas",
-        f"{overview['measurements_total']:,}",
+        "Messungen",
+        fmt_int(overview["measurements_total"]),
         border=True,
     )
 
 simulation_tab, datasets_tab, history_tab = st.tabs(
     [
-        ":material/play_circle: Simulación",
-        ":material/database: Datasets",
-        ":material/history: Historial",
+        ":material/play_circle: Simulation",
+        ":material/database: Datensätze",
+        ":material/history: Verlauf",
     ],
     on_change="rerun",
 )
@@ -1361,6 +1404,5 @@ if history_tab.open:
 
 st.divider()
 st.caption(
-    "MonteCarlo Lab · API desplegable en Render y base de datos en Neon · "
-    "código y documentación en el repositorio."
+    "MonteCarlo Lab · API auf Render und Datenbank bei Neon · Code und Dokumentation im Repository."
 )

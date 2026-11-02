@@ -16,7 +16,7 @@ def test_app_renders_without_api() -> None:
 
     assert not app.exception
     assert any("MonteCarlo Lab" in title.value for title in app.title)
-    assert any("Nueva simulación" in subheader.value for subheader in app.subheader)
+    assert any("Neue Simulation" in subheader.value for subheader in app.subheader)
 
 
 def test_switching_model_reshapes_the_form() -> None:
@@ -25,5 +25,5 @@ def test_switching_model_reshapes_the_form() -> None:
 
     assert not app.exception
     labels = [item.label for item in app.number_input]
-    assert "Media (μ)" in labels
-    assert "Pasos" not in labels
+    assert "Mittelwert (μ)" in labels
+    assert "Schritte" not in labels
