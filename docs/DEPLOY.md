@@ -102,7 +102,7 @@ CORS ni expone claves en el navegador.
 1. Entra en [share.streamlit.io](https://share.streamlit.io) y conecta GitHub.
 2. **Create app → Deploy a public app from GitHub**.
 3. Rellena:
-   - **Repository**: `dgoo24/Data-Engineering-Analytics-Software`
+   - **Repository**: `dgoo24/montecarlo-lab`
    - **Branch**: `main`
    - **Main file path**: `frontend/app.py`
 4. En **Advanced settings**:
